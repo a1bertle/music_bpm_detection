@@ -4,7 +4,7 @@
 
 This project began with research and planning carried out by Claude Code. The focus was to design a practical, greenfield C++ pipeline for BPM detection on MP3 audio and to output a WAV file with a metronome overlay. The result of that work is captured in the implementation plan:
 
-- `/Users/albertle/Documents/programming/dev/music_bpm_detection/swift-leaping-spindle.md`
+- `claude_code_implementation_plan.md`
 
 That plan lays out the architecture, data flow, dependency choices, module specifications, and a recommended implementation order. It also documents algorithm choices for onset detection, tempo estimation, and beat tracking, plus CLI requirements and verification steps.
 
