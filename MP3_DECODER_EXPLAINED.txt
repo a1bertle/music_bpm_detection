@@ -1,0 +1,219 @@
+MP3 DECODER -- STEP BY STEP
+=============================
+
+
+THE BIG PICTURE
+---------------
+
+The app takes an MP3 file as input. But MP3 is a compressed format -- the
+audio is encoded to save space, and you can't do math on it directly. Before
+any analysis can happen, we need to decompress it into raw audio samples.
+
+The decoder turns this:
+
+    song.mp3  (compressed, ~4 MB for a 3-min song)
+
+Into this:
+
+    AudioBuffer  (raw float samples, ~30 MB for the same song)
+
+
+MP3 file on disk
+|
++-- Read compressed bytes
+|
++-- minimp3 library decodes them
+|       (Huffman decoding, inverse MDCT, subband synthesis)
+|
++-- Output: array of float samples, sample rate, channel count
+|
++-- Store in AudioBuffer
+|
++-- Convert stereo to mono (for analysis)
+
+
+--------------------------------------------------------------------------------
+
+
+WHAT'S INSIDE AN MP3 FILE
+--------------------------
+
+An MP3 file is a stream of "frames" (not the same as our analysis frames).
+Each MP3 frame is a small chunk of compressed audio, typically 1152 samples
+at 44100 Hz (~26 ms of audio).
+
+MP3 file:
++---------+---------+---------+---------+---------+-----
+| frame 0 | frame 1 | frame 2 | frame 3 | frame 4 | ...
++---------+---------+---------+---------+---------+-----
+
+Each frame contains:
+    - Header (4 bytes): sample rate, bitrate, channel mode, etc.
+    - Side info: how to decode the main data.
+    - Main data: Huffman-coded frequency coefficients.
+
+The MP3 compression pipeline (what the encoder did):
+
+    Raw audio
+        |
+        v
+    Split into 32 frequency sub-bands (polyphase filter bank)
+        |
+        v
+    Apply MDCT (Modified Discrete Cosine Transform) to each sub-band
+        |
+        v
+    Psychoacoustic model: decide which frequencies are inaudible
+    (masked by louder nearby frequencies) and discard them
+        |
+        v
+    Quantize the remaining coefficients (lossy step -- precision is reduced)
+        |
+        v
+    Huffman encode (lossless compression of the quantized values)
+        |
+        v
+    MP3 bitstream
+
+The decoder reverses this:
+
+    MP3 bitstream
+        |
+        v
+    Huffman decode --> quantized frequency coefficients
+        |
+        v
+    Inverse quantization --> approximate MDCT coefficients
+        |
+        v
+    Inverse MDCT --> 32 sub-band signals
+        |
+        v
+    Polyphase synthesis filter bank --> time-domain audio samples
+        |
+        v
+    Raw PCM audio (what we need)
+
+The discarded information (from the psychoacoustic masking step) is gone
+forever -- that's why MP3 is lossy. But for BPM detection, this doesn't
+matter. Rhythm information survives MP3 compression very well because
+transients and beats are perceptually important, so the encoder preserves
+them.
+
+
+--------------------------------------------------------------------------------
+
+
+THE MINIMP3 LIBRARY
+--------------------
+
+We use minimp3, a header-only C library that handles all the decoding
+internally. Our code doesn't implement any of the MP3 math -- it just calls
+minimp3's high-level API:
+
+    1. mp3dec_load() reads the entire file and decodes all frames at once.
+
+    2. With MINIMP3_FLOAT_OUTPUT defined, it outputs float samples in the
+       range [-1.0, +1.0] instead of 16-bit integers. This saves us a
+       conversion step later.
+
+    3. It returns:
+       - buffer: pointer to the decoded float samples
+       - samples: total number of float values (frames * channels)
+       - hz: sample rate (e.g. 44100)
+       - channels: number of channels (1 = mono, 2 = stereo)
+
+    4. We copy the samples into a std::vector<float>, free minimp3's buffer,
+       and wrap everything in an AudioBuffer.
+
+
+--------------------------------------------------------------------------------
+
+
+INTERLEAVED SAMPLES
+--------------------
+
+For stereo audio, minimp3 outputs samples in interleaved format. Left and
+right channels alternate:
+
+    samples[0] = Left  channel, frame 0
+    samples[1] = Right channel, frame 0
+    samples[2] = Left  channel, frame 1
+    samples[3] = Right channel, frame 1
+    samples[4] = Left  channel, frame 2
+    samples[5] = Right channel, frame 2
+    ...
+
+    Index:    0    1    2    3    4    5    6    7    8    9   10   11
+    Channel:  L    R    L    R    L    R    L    R    L    R    L    R
+    Frame:    0    0    1    1    2    2    3    3    4    4    5    5
+
+For a stereo file, the total number of float values is 2 * num_frames.
+The AudioBuffer stores all of these in a flat vector, with the channel
+count stored separately so we know how to index into it:
+
+    sample at frame F, channel C  =  samples[F * channels + C]
+
+
+--------------------------------------------------------------------------------
+
+
+MONO CONVERSION
+----------------
+
+The onset detector needs mono audio (one value per time step). The stereo
+AudioBuffer is converted to mono by averaging the channels at each frame:
+
+    mono[frame] = (left[frame] + right[frame]) / 2
+
+For a stereo signal:
+
+    Left:   0.3   0.5  -0.1   0.8   0.2
+    Right:  0.1   0.7  -0.3   0.6   0.4
+    -----   ---   ---   ---   ---   ---
+    Mono:   0.2   0.6  -0.2   0.7   0.3
+
+The stereo version is kept around for the metronome overlay step at the end
+-- clicks need to be mixed into both channels so they sound centered.
+
+
+--------------------------------------------------------------------------------
+
+
+WHY DECODE THE WHOLE FILE AT ONCE?
+------------------------------------
+
+minimp3 can also decode frame-by-frame (streaming mode). But we need the
+entire onset strength function before we can estimate tempo, and we need all
+beats before we can overlay the metronome. There's no benefit to streaming --
+the whole pipeline is offline.
+
+Decoding a typical 3-minute MP3 at 44.1 kHz stereo produces:
+
+    3 min * 60 sec/min * 44100 samples/sec * 2 channels = 15,876,000 floats
+    15,876,000 * 4 bytes/float = ~60 MB
+
+This fits comfortably in memory on any modern machine.
+
+
+--------------------------------------------------------------------------------
+
+
+PUTTING IT ALL TOGETHER
+------------------------
+
+    song.mp3 on disk
+        |
+        v
+    mp3dec_load()  -->  float buffer, sample_rate=44100, channels=2
+        |
+        v
+    Copy into AudioBuffer (stereo)
+        |
+        v
+    AudioBuffer.to_mono()  -->  average L+R per frame
+        |
+        |
+        +---> Stereo AudioBuffer kept for later (metronome overlay)
+        |
+        +---> Mono AudioBuffer passed to onset detector
