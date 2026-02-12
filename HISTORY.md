@@ -41,3 +41,62 @@ Additionally, the raw autocorrelation was normalized by overlap count to prevent
 | Track 3 (self-recording, tempo fluctuations) | 119.7 | ~116 | +3.2% |
 
 Track 3 is a self-recording with strings and a drum loop where the tempo fluctuates, explaining the larger error from the single-global-BPM estimator.
+
+## Pipeline Explainer Documents
+
+Detailed plain-text explainer documents were created for each stage of the BPM detection pipeline, with ASCII diagrams, worked numeric examples, and step-by-step walkthroughs. These live under `docs/`:
+
+- `ONSET_DETECTOR_EXPLAINED.txt` — Hann windowing, FFT, mel filterbank, spectral flux
+- `TEMPO_ESTIMATOR_EXPLAINED.txt` — autocorrelation, tempo prior, octave correction, parabolic interpolation
+- `BEAT_TRACKER_EXPLAINED.txt` — dynamic programming forward pass, backtrace, frame-to-sample conversion
+- `MP3_DECODER_EXPLAINED.txt` — MP3 compression/decompression, minimp3 integration
+- `METRONOME_EXPLAINED.txt` — click synthesis, stereo mixing, clipping prevention
+- `WAV_WRITER_EXPLAINED.txt` — RIFF/WAVE header layout, float-to-int16 conversion
+- `PIPELINE_EXPLAINED.txt` — full pipeline overview, data flow, and data size breakdown
+
+Originally created as markdown, the files were converted to plain text with pure ASCII diagrams after discovering that unicode box-drawing characters render with inconsistent widths in monospace fonts.
+
+## MP4/M4A Input Support
+
+Added support for MP4 and M4A audio files as input. The approach mirrors the existing MP3 pipeline but uses `ffmpeg` as an external subprocess to extract audio:
+
+1. `ffmpeg` converts the MP4/M4A to a temporary 16-bit PCM WAV file (44100 Hz, stereo).
+2. A new `WavReader` module parses the WAV file into an `AudioBuffer`.
+3. The temporary file is deleted after reading.
+
+New files:
+- `include/bpm/wav_reader.h` / `src/wav_reader.cpp` — WAV file parser (reused by YouTube decoder)
+- `include/bpm/mp4_decoder.h` / `src/mp4_decoder.cpp` — ffmpeg subprocess + WavReader
+
+The pipeline auto-selects the decoder based on file extension (`.mp4`, `.m4a`).
+
+### Test results
+
+| Track | Format | Detected BPM | Actual BPM |
+|-------|--------|-------------|------------|
+| Sunrise | MP3 | 128.2 | 128 |
+| Sunrise | MP4 | 126.0 | 128 |
+
+Both formats produce consistent results for the same track.
+
+## YouTube URL Support
+
+Added support for YouTube URLs as input, enabling BPM detection directly from a video link without manual downloading. Uses `yt-dlp` and `ffmpeg` as external subprocesses:
+
+1. `yt-dlp` downloads the best available audio stream (with `--no-playlist` to prevent downloading entire playlists).
+2. `ffmpeg` converts the downloaded audio to a temporary 16-bit PCM WAV file.
+3. `WavReader` loads the WAV into an `AudioBuffer`.
+4. Both temporary files are cleaned up after reading.
+
+New files:
+- `include/bpm/youtube_decoder.h` / `src/youtube_decoder.cpp`
+
+The pipeline detects URLs by checking for `://` in the input path. Default output for URLs is `output_click.wav` instead of appending to the URL string.
+
+### Test results
+
+| Track | Source | Detected BPM | Actual BPM |
+|-------|--------|-------------|------------|
+| Art Exhibit — Young the Giant | YouTube URL | 150.6 | 150 |
+
+Prerequisites: `yt-dlp` and `ffmpeg` must be installed. The README was updated with installation instructions for macOS (Homebrew) and Ubuntu/Debian.
