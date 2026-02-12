@@ -6,7 +6,8 @@
 namespace {
 
 void print_help() {
-  std::cout << "Usage: bpm_detect [options] <input.mp3>\n"
+  std::cout << "Usage: bpm_detect [options] <input>\n"
+            << "\nSupported formats: MP3, MP4, M4A (MP4/M4A require ffmpeg)\n\n"
             << "  -o, --output <path>     Output WAV path (default: <input>_click.wav)\n"
             << "  -v, --verbose           Print detailed info\n"
             << "  --min-bpm <float>       Min BPM (default: 50)\n"
@@ -100,7 +101,7 @@ int main(int argc, char **argv) {
   }
 
   if (input_path.empty()) {
-    std::cerr << "No input MP3 provided.\n";
+    std::cerr << "No input file provided.\n";
     print_help();
     return 1;
   }

@@ -1,20 +1,46 @@
 #include "bpm/pipeline.h"
 
+#include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 #include "bpm/beat_tracker.h"
 #include "bpm/metronome.h"
 #include "bpm/mp3_decoder.h"
+#include "bpm/mp4_decoder.h"
 #include "bpm/onset_detector.h"
 #include "bpm/tempo_estimator.h"
 #include "bpm/wav_writer.h"
 
 namespace bpm {
+namespace {
+
+std::string get_extension(const std::string &path) {
+  auto dot = path.rfind('.');
+  if (dot == std::string::npos) {
+    return "";
+  }
+  std::string ext = path.substr(dot);
+  std::transform(ext.begin(), ext.end(), ext.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return ext;
+}
+
+}  // namespace
 
 void Pipeline::run(const std::string &input_path,
                    const std::string &output_path,
                    const PipelineOptions &options) const {
-  AudioBuffer stereo = Mp3Decoder::decode(input_path);
+  std::string ext = get_extension(input_path);
+  AudioBuffer stereo;
+  if (ext == ".mp3") {
+    stereo = Mp3Decoder::decode(input_path);
+  } else if (ext == ".mp4" || ext == ".m4a") {
+    stereo = Mp4Decoder::decode(input_path);
+  } else {
+    throw std::runtime_error("Unsupported file format: " + ext +
+                             "\nSupported formats: .mp3, .mp4, .m4a");
+  }
   if (options.verbose) {
     std::cout << "Decoded " << stereo.num_frames() << " frames @ " << stereo.sample_rate << " Hz.\n";
   }
