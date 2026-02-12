@@ -139,6 +139,19 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
     }
   }
 
+  // Half-tempo preference: if BPM is above 200, it is almost certainly an
+  // octave error (2x the true tempo).  Prefer the half-tempo when the
+  // doubled lag falls within the valid search range.
+  {
+    float candidate_bpm = bpm_from_lag(best_lag, frame_rate);
+    if (candidate_bpm > 200.0f) {
+      int double_lag = best_lag * 2;
+      if (double_lag <= max_lag) {
+        best_lag = double_lag;
+      }
+    }
+  }
+
   // Parabolic interpolation for sub-lag BPM precision.
   double refined_lag = parabolic_interpolate(autocorr, best_lag, min_lag, max_lag);
 
