@@ -1,0 +1,264 @@
+ONSET DETECTOR -- STEP BY STEP
+===============================
+
+
+THE BIG PICTURE
+---------------
+
+Raw audio waveform
+|
++-- Frame into overlapping chunks --> [ frame 0 ][ frame 1 ][ frame 2 ] ...
+|                                       2048 samples each, 512 apart
+|
++-- Window each frame (Hann) -------> Smooth edges to zero
+|
++-- FFT each frame -----------------> 1025 frequency bins (complex)
+|
++-- Power spectrum ------------------> |X[k]|^2  (discard phase)
+|
++-- Mel filterbank ------------------> 1025 bins  ->  40 mel bands
+|
++-- Log compress --------------------> log10(energy + epsilon)
+|
++-- Frame-to-frame difference -------> delta = frame[n] - frame[n-1]
+|
++-- Half-wave rectify ---------------> Keep only increases
+|
++-- Sum across bands ----------------> One scalar per frame
+|
++-- Normalize (mean=0, stddev=1) ----> Onset strength function O[n]
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 1: FRAMING WITH OVERLAP
+-----------------------------
+
+The audio is a long 1D signal. You cut it into chunks of 2048 samples, but
+each chunk starts only 512 samples after the last -- 75% overlap.
+
+Audio signal:
+|================================================================|
+
+Frame 0:  |########################|
+Frame 1:       |########################|
+Frame 2:            |########################|
+Frame 3:                 |########################|
+          <---->
+          512 samples (hop)
+          <------------------------->
+              2048 samples (window)
+
+Why overlap? Without it you'd miss onsets that fall on a frame boundary. The
+512-sample hop gives ~86 frames/sec at 44.1 kHz -- fine temporal resolution
+for beat tracking.
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 2: HANN WINDOW
+--------------------
+
+Each frame is multiplied element-wise by a Hann window before FFT. This tapers
+the edges to zero so the FFT doesn't see artificial discontinuities at the
+frame boundaries.
+
+Raw frame:
+
+  +------------------------+
+  |########################|        Sharp edges cause
+  |########################|        spectral leakage in FFT
+  +------------------------+
+
+
+Hann window:    w[n] = 0.5 * (1 - cos(2*pi*n / (N-1)))
+
+             .--------.
+           ./            \.
+         ./                \.
+       ./                    \.
+     ./                        \.
+  --'                            '--
+
+
+Windowed frame = raw * hann:
+
+             .--------.
+           ./            \.
+         ./                \.
+       ./                    \.        Smooth edges = clean FFT
+  ___./                        \.___
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 3: FFT -> POWER SPECTRUM
+------------------------------
+
+Real-to-complex FFT turns 2048 time-domain samples into 1025 complex frequency
+bins. Then phase is thrown away -- only magnitude^2 (power) is kept.
+
+Time domain                                  Frequency domain
+(2048 samples)                               (1025 bins)
+
+                                             Power spectrum P[k] = Re^2 + Im^2
+    /\    /\    /\
+   /  \  /  \  /  \/\                              #
+  /    \/    \/    \  \          rfft             # #
+ /                  \  \       ----->           # # #
+/                    \--               #     # # # #
+                                       # #   # # # # #
+                                       # # # # # # # # #   #
+                                       # # # # # # # # # # #
+                                       0 Hz             22050 Hz
+                                       bin 0            bin 1024
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 4: MEL FILTERBANK (1025 bins -> 40 bands)
+-----------------------------------------------
+
+This is the key perceptual trick. Human pitch perception is roughly
+logarithmic -- we hear the difference between 100 and 200 Hz as the same
+"distance" as 1000 and 2000 Hz. The mel scale captures this.
+
+40 triangular filters are placed with centers evenly spaced on the mel scale
+between 30 Hz and 8000 Hz:
+
+mel(f) = 2595 * log10(1 + f/700)
+
+Frequency axis (Hz, linear scale):
+0         500     1000      2000        4000            8000
+|----------|--------|---------|-----------|---------------|
+
+Filters packed densely               Filters spread out
+at low freq:                         at high freq:
+
+ /\  /\  /\  /\  /\  /\                    /\                /\
+/  \/  \/  \/  \/  \/  \                  /  \              /  \
+                                         /    \            /    \
+                                        /      \          /      \
+-+--+--+--+--+--+--+--+-       --------+--------+--------+--------+---
+ 1  2  3  4  5  6  7  8               35         36      39         40
+
+ |<-- narrow bands   -->|             |<---  wide bands          -->|
+     (high resolution)                     (low resolution)
+
+
+Each individual triangle:
+
+           /\
+          /  \           energy = sum of P[k] * weight[k]
+         /    \          for all bins k inside the triangle
+        /      \
+  -----/--------\-----
+      lo  center  hi
+
+Each filter weights and sums the power spectrum bins falling under its
+triangle, producing one energy value per band. Result: 40 values per frame
+instead of 1025.
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 5: LOG COMPRESSION
+------------------------
+
+Before log:                          After log10(E + 1e-10):
+
+Band energies (linear):             Band energies (log):
+
+ #                                    #
+ #                                    #  #
+ #                                    #  #
+ #                                    #  #     #
+ #            #                       #  #  #  #
+ #            #                       #  #  #  #  #
+ #     #      #                       #  #  #  #  #  #  #
+ #  #  #  #   #  #  #                 #  #  #  #  #  #  #  #
+ 1  2  3  4   5  6  7                 1  2  3  4  5  6  7  8
+
+ Quiet bands are tiny,               Dynamic range compressed --
+ loud bands dominate.                 soft onsets become visible.
+
+This is critical for detecting soft onsets (e.g., a violin entry). Without
+log compression, a quiet note starting during a loud passage would be
+invisible. With it, the ratio of energy change matters, not the absolute
+difference.
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 6: DIFFERENCE -> HALF-WAVE RECTIFY -> SUM
+------------------------------------------------
+
+This is where onsets actually get detected. Compare each frame to the previous
+one, band by band:
+
+Frame n-1 (5 of 40 mel bands):       Frame n (5 of 40 mel bands):
+
+ #                                     #
+ #  #                                  #
+ #  #                                  #  #
+ #  #     #                            #  #  #  #
+ #  #  #  #  #                         #  #  #  #  #
+ 1  2  3  4  5                         1  2  3  4  5
+
+
+Difference per band:  D[b] = L[n][b] - L[n-1][b]
+
+ band:   1     2     3     4     5
+ D[b]:   0     0    +2    +1     0
+                     ^     ^
+                     |     |
+                   went   went     bands 1,2,5: same or
+                    UP     UP      decreased -- ignored
+
+
+Half-wave rectify:  max(0, D[b])  -- keep only increases
+
+         #
+         #  #
+ 0  0    #  #  0
+ 1  2    3  4  5
+
+
+Sum across bands:  O[n] = sum_b max(0, D[b]) = 2 + 1 = 3  (one number)
+
+Why only increases? A note ending causes energy to drop, but that's not a
+rhythmic event you want to track. Only new energy -- a note attack, a drum
+hit -- should register as an onset.
+
+
+--------------------------------------------------------------------------------
+
+
+STEP 7: THE FINAL ONSET STRENGTH CURVE
+----------------------------------------
+
+After doing this for every frame, you get one value per frame -- the onset
+strength function:
+
+O[n]
+ |
+ |          #           #           #           #
+ |          #           #           #     #     #
+ |     #    #     #     #     #     #     #     #     #
+ |     #    #     #     #     #     #     #     #     #
+ +-----#----#-----#-----#-----#-----#-----#-----#-----#-----> time
+       |    |     |     |     |     |     |     |     |
+      kick hat  snare  hat  kick  hat  snare  hat   kick
+
+The peaks correspond to rhythmic events in the audio.
+This is what the tempo estimator and beat tracker consume.
+
+After z-score normalization ((O[n] - mean) / stddev), the values are centered
+at 0 with unit variance, so the downstream stages don't need to know anything
+about the recording's loudness or instrumentation.
