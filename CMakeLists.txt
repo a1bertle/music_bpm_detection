@@ -26,6 +26,7 @@ add_library(bpm STATIC
   src/audio_buffer.cpp
   src/mp3_decoder.cpp
   src/mp4_decoder.cpp
+  src/youtube_decoder.cpp
   src/wav_reader.cpp
   src/onset_detector.cpp
   src/tempo_estimator.cpp

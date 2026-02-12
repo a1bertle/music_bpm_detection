@@ -1,10 +1,25 @@
 # music_bpm_detection
 
-A C++17 command-line tool that detects the tempo (BPM) of an MP3 file and outputs a WAV file with a metronome click track mixed in at the detected beat positions.
+A C++17 command-line tool that detects the tempo (BPM) of an audio file or YouTube video and outputs a WAV file with a metronome click track mixed in at the detected beat positions.
+
+Supported inputs: MP3, MP4/M4A, and YouTube URLs.
+
+## Prerequisites
+
+- CMake 3.16+ and a C++17 compiler
+- **ffmpeg** — required for MP4/M4A and YouTube inputs ([install](https://ffmpeg.org/download.html))
+- **yt-dlp** — required for YouTube URL inputs ([install](https://github.com/yt-dlp/yt-dlp#installation))
+
+```bash
+# macOS (Homebrew)
+brew install ffmpeg yt-dlp
+
+# Ubuntu/Debian
+sudo apt install ffmpeg
+pip install yt-dlp
+```
 
 ## Build
-
-Requires CMake 3.16+ and a C++17 compiler.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -22,8 +37,10 @@ The executable is produced at `build/bpm_detect`.
 ## Usage
 
 ```
-bpm_detect [options] <input.mp3>
+bpm_detect [options] <input>
 ```
+
+`<input>` can be an MP3 file, MP4/M4A file, or a YouTube URL.
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -37,10 +54,22 @@ bpm_detect [options] <input.mp3>
 
 ### Examples
 
-Detect BPM and write a click track with default settings:
+Detect BPM from an MP3 file:
 
 ```bash
 ./build/bpm_detect song.mp3
+```
+
+Detect BPM from an MP4 or M4A file:
+
+```bash
+./build/bpm_detect video.mp4
+```
+
+Detect BPM from a YouTube URL:
+
+```bash
+./build/bpm_detect "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
 Custom output path, narrowed BPM range, quieter click:
@@ -54,10 +83,10 @@ Custom output path, narrowed BPM range, quieter click:
 The tool runs a multi-stage audio analysis pipeline:
 
 ```
-MP3 file
+Input (MP3 / MP4 / YouTube URL)
   │
   ▼
-Mp3Decoder ──► AudioBuffer (stereo float PCM)
+Decoder ──────► AudioBuffer (stereo float PCM)
   │                          │
   │ to_mono()                │ (preserved for final mix)
   ▼                          │
@@ -75,6 +104,8 @@ Metronome ◄──────────────────┘
   ▼
 WavWriter ──► output.wav
 ```
+
+The decoder is selected automatically: `Mp3Decoder` for `.mp3` files, `Mp4Decoder` for `.mp4`/`.m4a` (via ffmpeg), or `YoutubeDecoder` for URLs (via yt-dlp + ffmpeg).
 
 ### 1. Onset Detection
 
@@ -99,6 +130,9 @@ CMakeLists.txt              Build configuration
 include/bpm/
   audio_buffer.h            PCM audio container with mono conversion
   mp3_decoder.h             MP3 → float PCM decoding
+  mp4_decoder.h             MP4/M4A → float PCM (via ffmpeg)
+  youtube_decoder.h         YouTube URL → float PCM (via yt-dlp + ffmpeg)
+  wav_reader.h              WAV file reader (used by MP4/YouTube decoders)
   onset_detector.h          Mel-spectral-flux onset detection
   tempo_estimator.h         Autocorrelation tempo estimation
   beat_tracker.h            DP beat tracking
@@ -109,12 +143,25 @@ src/
   main.cpp                  CLI entry point
   audio_buffer.cpp
   mp3_decoder.cpp
+  mp4_decoder.cpp
+  youtube_decoder.cpp
+  wav_reader.cpp
   onset_detector.cpp
   tempo_estimator.cpp
   beat_tracker.cpp
   metronome.cpp
   wav_writer.cpp
   pipeline.cpp
+docs/
+  ONSET_DETECTOR_EXPLAINED.txt
+  TEMPO_ESTIMATOR_EXPLAINED.txt
+  BEAT_TRACKER_EXPLAINED.txt
+  MP3_DECODER_EXPLAINED.txt
+  METRONOME_EXPLAINED.txt
+  WAV_WRITER_EXPLAINED.txt
+  PIPELINE_EXPLAINED.txt
+scripts/
+  build.sh                  Build helper script
 third_party/
   minimp3/                  MP3 decoder (CC0)
   pocketfft/                FFT library (BSD)
@@ -122,18 +169,28 @@ third_party/
 
 ## Dependencies
 
-Both dependencies are vendored under `third_party/` for offline builds -- no package manager or network access required.
+### Vendored (no install needed)
 
 | Library | Purpose | License |
 |---------|---------|---------|
 | [minimp3](https://github.com/lieff/minimp3) | Header-only MP3 decoder | CC0 (Public Domain) |
 | [pocketfft](https://github.com/mreineck/pocketfft) | FFT computation | BSD |
 
+### External (optional, install separately)
+
+| Tool | Required for | Install |
+|------|-------------|---------|
+| [ffmpeg](https://ffmpeg.org/) | MP4/M4A and YouTube inputs | `brew install ffmpeg` |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | YouTube URL inputs | `brew install yt-dlp` |
+
+MP3 input requires no external tools. MP4/M4A and YouTube features are only available when the corresponding tools are installed.
+
 ## Limitations
 
 - Estimates a single global BPM per track. Music with significant tempo changes (rubato, accelerando) will receive an averaged tempo.
 - Classical music with soft onsets and no percussion is the hardest case for accurate beat placement.
 - Output is WAV only (no MP3 re-encoding).
+- YouTube downloads require a working internet connection and are subject to yt-dlp compatibility with YouTube.
 
 ## License
 

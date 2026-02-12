@@ -7,7 +7,8 @@ namespace {
 
 void print_help() {
   std::cout << "Usage: bpm_detect [options] <input>\n"
-            << "\nSupported formats: MP3, MP4, M4A (MP4/M4A require ffmpeg)\n\n"
+            << "\nSupported inputs: MP3, MP4, M4A, YouTube URL\n"
+            << "  MP4/M4A require ffmpeg. YouTube requires yt-dlp and ffmpeg.\n\n"
             << "  -o, --output <path>     Output WAV path (default: <input>_click.wav)\n"
             << "  -v, --verbose           Print detailed info\n"
             << "  --min-bpm <float>       Min BPM (default: 50)\n"
@@ -107,7 +108,11 @@ int main(int argc, char **argv) {
   }
 
   if (output_path.empty()) {
-    output_path = input_path + "_click.wav";
+    if (input_path.find("://") != std::string::npos) {
+      output_path = "output_click.wav";
+    } else {
+      output_path = input_path + "_click.wav";
+    }
   }
 
   try {
