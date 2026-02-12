@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -45,7 +46,8 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
                                                 int sample_rate,
                                                 int hop_size,
                                                 float min_bpm,
-                                                float max_bpm) const {
+                                                float max_bpm,
+                                                bool verbose) const {
   if (sample_rate <= 0 || hop_size <= 0) {
     throw std::runtime_error("TempoEstimator invalid sample rate or hop size.");
   }
@@ -98,6 +100,24 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
     }
   }
 
+  if (verbose) {
+    std::vector<std::pair<double, int>> peaks;
+    for (int lag = min_lag; lag <= max_lag; ++lag) {
+      peaks.push_back({weighted[static_cast<std::size_t>(lag)], lag});
+    }
+    std::sort(peaks.rbegin(), peaks.rend());
+    std::cout << "Tempo candidates (top 10 weighted peaks):\n";
+    for (int i = 0; i < std::min(10, static_cast<int>(peaks.size())); ++i) {
+      std::cout << "  lag=" << peaks[i].second
+                << " bpm=" << bpm_from_lag(peaks[i].second, frame_rate)
+                << " weighted=" << peaks[i].first
+                << " autocorr=" << autocorr[static_cast<std::size_t>(peaks[i].second)]
+                << "\n";
+    }
+    std::cout << "Best lag after prior: " << best_lag
+              << " (" << bpm_from_lag(best_lag, frame_rate) << " BPM)\n";
+  }
+
   // Compute median weighted score as a noise floor estimate.
   double median_weighted = 0.0;
   {
@@ -113,7 +133,8 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
   }
 
   // Octave correction: iteratively halve the lag to prefer the fastest tempo
-  // whose autocorrelation peak is genuine (above the median noise floor).
+  // whose autocorrelation peak is genuine (above the median noise floor and
+  // at least half the strength of the current best).
   // Sub-harmonics (2T, 3T, ...) always produce strong autocorrelation peaks.
   for (;;) {
     int half_center = best_lag / 2;
@@ -132,9 +153,23 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
     if (best_half < min_lag) {
       break;
     }
-    if (best_half_score > median_weighted) {
+    double parent_score = weighted[static_cast<std::size_t>(best_lag)];
+    if (best_half_score > median_weighted &&
+        best_half_score > 0.5 * parent_score) {
+      if (verbose) {
+        std::cout << "Octave correction: lag " << best_lag << " ("
+                  << bpm_from_lag(best_lag, frame_rate) << " BPM) -> lag "
+                  << best_half << " (" << bpm_from_lag(best_half, frame_rate)
+                  << " BPM), ratio=" << best_half_score / parent_score << "\n";
+      }
       best_lag = best_half;
     } else {
+      if (verbose) {
+        std::cout << "Octave correction stopped at lag " << best_half << " ("
+                  << bpm_from_lag(best_half, frame_rate)
+                  << " BPM): ratio=" << (parent_score > 0 ? best_half_score / parent_score : 0)
+                  << " (need >0.5)\n";
+      }
       break;
     }
   }
@@ -147,6 +182,10 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
     if (candidate_bpm > 200.0f) {
       int double_lag = best_lag * 2;
       if (double_lag <= max_lag) {
+        if (verbose) {
+          std::cout << "Half-tempo correction: " << candidate_bpm << " BPM -> "
+                    << bpm_from_lag(double_lag, frame_rate) << " BPM\n";
+        }
         best_lag = double_lag;
       }
     }
@@ -154,6 +193,10 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
 
   // Parabolic interpolation for sub-lag BPM precision.
   double refined_lag = parabolic_interpolate(autocorr, best_lag, min_lag, max_lag);
+
+  if (verbose) {
+    std::cout << "Final lag: " << best_lag << " (refined: " << refined_lag << ")\n";
+  }
 
   Result result;
   result.period_frames = best_lag;

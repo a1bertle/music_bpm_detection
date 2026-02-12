@@ -44,5 +44,12 @@
 *.wav
 *.mp3
 
+# Video files
+*.mp4
+
 # Build output
 build/
+
+.DS_Store
+
+

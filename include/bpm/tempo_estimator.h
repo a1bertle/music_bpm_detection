@@ -15,7 +15,8 @@ class TempoEstimator {
                   int sample_rate,
                   int hop_size,
                   float min_bpm = 50.0f,
-                  float max_bpm = 220.0f) const;
+                  float max_bpm = 220.0f,
+                  bool verbose = false) const;
 };
 
 }  // namespace bpm

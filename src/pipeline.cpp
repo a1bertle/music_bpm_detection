@@ -62,7 +62,8 @@ void Pipeline::run(const std::string &input_path,
                                         mono.sample_rate,
                                         onset.hop_size,
                                         options.min_bpm,
-                                        options.max_bpm);
+                                        options.max_bpm,
+                                        options.verbose);
   std::cout << "Detected BPM: " << tempo.bpm << "\n";
 
   BeatTracker beat_tracker;
