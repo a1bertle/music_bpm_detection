@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 #include "bpm/beat_tracker.h"
@@ -64,12 +65,64 @@ void Pipeline::run(const std::string &input_path,
                                         options.min_bpm,
                                         options.max_bpm,
                                         options.verbose);
-  std::cout << "Detected BPM: " << tempo.bpm << "\n";
-
+  // Evaluate multiple tempo candidates through the beat tracker and pick the
+  // one with the highest DP score.  This resolves cases where autocorrelation
+  // favours a sub-optimal period (e.g. syncopated tracks).
   BeatTracker beat_tracker;
-  auto beats = beat_tracker.track(onset.onset_strength,
-                                  tempo.period_frames,
-                                  onset.hop_size);
+  BeatTracker::Result beats;
+  int best_period = tempo.period_frames;
+  double best_beat_score = -std::numeric_limits<double>::infinity();
+
+  float primary_bpm = tempo.bpm;
+  for (int candidate : tempo.candidate_periods) {
+    float candidate_bpm = (candidate > 0)
+        ? 60.0f * static_cast<float>(mono.sample_rate) /
+              static_cast<float>(onset.hop_size) / static_cast<float>(candidate)
+        : 0.0f;
+
+    // Only compare candidates within ±40% of the primary estimate to avoid
+    // sub-harmonics (half/double tempo) distorting the comparison.
+    float ratio = candidate_bpm / primary_bpm;
+    if (ratio < 0.6f || ratio > 1.4f) {
+      if (options.verbose) {
+        std::cout << "  Candidate period=" << candidate
+                  << " (" << candidate_bpm << " BPM) — skipped (outside ±40%)\n";
+      }
+      continue;
+    }
+
+    auto candidate_beats = beat_tracker.track(onset.onset_strength,
+                                              candidate,
+                                              onset.hop_size);
+    // Normalize by beat count so faster tempos (more beats) don't
+    // accumulate an unfairly higher total score.
+    double norm_score = candidate_beats.beat_samples.empty()
+        ? 0.0
+        : candidate_beats.score / static_cast<double>(candidate_beats.beat_samples.size());
+    if (options.verbose) {
+      std::cout << "  Candidate period=" << candidate
+                << " (" << candidate_bpm << " BPM)"
+                << " score=" << candidate_beats.score
+                << " beats=" << candidate_beats.beat_samples.size()
+                << " norm=" << norm_score << "\n";
+    }
+    if (norm_score > best_beat_score) {
+      best_beat_score = norm_score;
+      beats = std::move(candidate_beats);
+      best_period = candidate;
+    }
+  }
+
+  // Recompute BPM from the winning period.
+  float frame_rate = static_cast<float>(mono.sample_rate) /
+                     static_cast<float>(onset.hop_size);
+  float final_bpm = (best_period > 0) ? 60.0f * frame_rate / static_cast<float>(best_period) : tempo.bpm;
+  if (best_period != tempo.period_frames && options.verbose) {
+    std::cout << "Beat-tracker re-estimated tempo: " << tempo.bpm
+              << " BPM -> " << final_bpm << " BPM (period " << best_period << ")\n";
+  }
+
+  std::cout << "Detected BPM: " << final_bpm << "\n";
   std::cout << "Beat count: " << beats.beat_samples.size() << "\n";
 
   Metronome metronome;

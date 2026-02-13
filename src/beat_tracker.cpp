@@ -62,6 +62,7 @@ BeatTracker::Result BeatTracker::track(const std::vector<float> &onset_strength,
   }
   std::reverse(beat_frames.begin(), beat_frames.end());
 
+  result.score = best_score;
   result.beat_samples.reserve(beat_frames.size());
   for (std::size_t frame : beat_frames) {
     result.beat_samples.push_back(frame * static_cast<std::size_t>(hop_size));

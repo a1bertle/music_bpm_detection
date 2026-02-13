@@ -9,6 +9,7 @@ class BeatTracker {
  public:
   struct Result {
     std::vector<std::size_t> beat_samples;
+    double score = 0.0;
   };
 
   Result track(const std::vector<float> &onset_strength,

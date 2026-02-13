@@ -194,13 +194,46 @@ TempoEstimator::Result TempoEstimator::estimate(const std::vector<float> &onset_
   // Parabolic interpolation for sub-lag BPM precision.
   double refined_lag = parabolic_interpolate(autocorr, best_lag, min_lag, max_lag);
 
-  if (verbose) {
-    std::cout << "Final lag: " << best_lag << " (refined: " << refined_lag << ")\n";
-  }
-
   Result result;
   result.period_frames = best_lag;
   result.bpm = bpm_from_lag_f(refined_lag, frame_rate);
+
+  // Collect top candidate periods (distinct peaks separated by >= 3 lags).
+  {
+    std::vector<std::pair<double, int>> peaks;
+    for (int lag = min_lag; lag <= max_lag; ++lag) {
+      peaks.push_back({weighted[static_cast<std::size_t>(lag)], lag});
+    }
+    std::sort(peaks.rbegin(), peaks.rend());
+
+    result.candidate_periods.push_back(best_lag);
+    for (const auto &p : peaks) {
+      if (static_cast<int>(result.candidate_periods.size()) >= 5) {
+        break;
+      }
+      int lag = p.second;
+      bool too_close = false;
+      for (int existing : result.candidate_periods) {
+        if (std::abs(lag - existing) < 3) {
+          too_close = true;
+          break;
+        }
+      }
+      if (!too_close) {
+        result.candidate_periods.push_back(lag);
+      }
+    }
+  }
+
+  if (verbose) {
+    std::cout << "Final lag: " << best_lag << " (refined: " << refined_lag << ")\n";
+    std::cout << "Candidates for beat tracking:";
+    for (int c : result.candidate_periods) {
+      std::cout << " lag=" << c << "(" << bpm_from_lag(c, frame_rate) << " BPM)";
+    }
+    std::cout << "\n";
+  }
+
   return result;
 }
 

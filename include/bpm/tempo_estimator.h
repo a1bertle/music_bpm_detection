@@ -9,6 +9,7 @@ class TempoEstimator {
   struct Result {
     float bpm = 0.0f;
     int period_frames = 0;
+    std::vector<int> candidate_periods;
   };
 
   Result estimate(const std::vector<float> &onset_strength,
