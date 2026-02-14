@@ -198,4 +198,4 @@ An interactive Jupyter notebook that re-implements the entire pipeline in Python
 
 ## License
 
-MIT
+GNU GPLv3. See `LICENSE`.
