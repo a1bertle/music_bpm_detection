@@ -142,20 +142,27 @@ void Pipeline::run(const std::string &input_path,
   std::cout << "Detected BPM: " << final_bpm << "\n";
   std::cout << "Beat count: " << beats.beat_samples.size() << "\n";
 
+  // Build output paths.
+  int bpm_int = static_cast<int>(std::round(final_bpm));
+  std::string actual_output = output_path;
+  std::string raw_output;
+
+  if (actual_output.empty() && !stereo.title.empty()) {
+    std::string base = sanitize_filename(stereo.title);
+    actual_output = base + "_" + std::to_string(bpm_int) + "bpm.wav";
+    raw_output = base + ".wav";
+  } else if (actual_output.empty()) {
+    actual_output = "output_click.wav";
+  }
+
+  // Save the raw audio (without click track) for YouTube downloads.
+  if (!raw_output.empty()) {
+    WavWriter::write(raw_output, stereo);
+    std::cout << "Audio: " << raw_output << "\n";
+  }
+
   Metronome metronome;
   metronome.overlay(stereo, beats.beat_samples, options.click_volume, options.click_freq);
-
-  // Build output path: use title + BPM when auto-naming YouTube downloads.
-  std::string actual_output = output_path;
-  if (actual_output.empty()) {
-    if (!stereo.title.empty()) {
-      int bpm_int = static_cast<int>(std::round(final_bpm));
-      actual_output = sanitize_filename(stereo.title) + "_" +
-                      std::to_string(bpm_int) + "bpm.wav";
-    } else {
-      actual_output = "output_click.wav";
-    }
-  }
 
   WavWriter::write(actual_output, stereo);
   std::cout << "Output: " << actual_output << "\n";
