@@ -9,9 +9,35 @@
 
 namespace bpm {
 
+namespace {
+
+std::string get_video_title(const std::string &url) {
+  std::string command = "yt-dlp --get-title --no-playlist \"" + url + "\" 2>/dev/null";
+  FILE *pipe = popen(command.c_str(), "r");
+  if (!pipe) {
+    return "";
+  }
+  char buffer[512];
+  std::string title;
+  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+    title += buffer;
+  }
+  pclose(pipe);
+  // Trim trailing newline.
+  while (!title.empty() && (title.back() == '\n' || title.back() == '\r')) {
+    title.pop_back();
+  }
+  return title;
+}
+
+}  // namespace
+
 AudioBuffer YoutubeDecoder::decode(const std::string &url) {
   std::string temp_dl = "/tmp/bpm_yt_download";
   std::string temp_wav = "/tmp/bpm_yt_audio.wav";
+
+  // Fetch video title for output naming.
+  std::string video_title = get_video_title(url);
 
   // Download best audio stream with yt-dlp.
   std::string dl_command = "yt-dlp -f \"bestaudio\" --no-playlist -o \"" +
@@ -41,6 +67,7 @@ AudioBuffer YoutubeDecoder::decode(const std::string &url) {
 
   AudioBuffer audio = WavReader::read(temp_wav);
   std::remove(temp_wav.c_str());
+  audio.title = video_title;
   return audio;
 }
 

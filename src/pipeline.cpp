@@ -1,8 +1,10 @@
 #include "bpm/pipeline.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 
 #include "bpm/beat_tracker.h"
@@ -26,6 +28,21 @@ std::string get_extension(const std::string &path) {
   std::transform(ext.begin(), ext.end(), ext.begin(),
                  [](unsigned char c) { return std::tolower(c); });
   return ext;
+}
+
+std::string sanitize_filename(const std::string &name) {
+  std::string result;
+  result.reserve(name.size());
+  for (char c : name) {
+    if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+        c == '"' || c == '<' || c == '>' || c == '|' ||
+        c == ' ' || c == '-') {
+      result += '_';
+    } else {
+      result += c;
+    }
+  }
+  return result;
 }
 
 }  // namespace
@@ -128,10 +145,20 @@ void Pipeline::run(const std::string &input_path,
   Metronome metronome;
   metronome.overlay(stereo, beats.beat_samples, options.click_volume, options.click_freq);
 
-  WavWriter::write(output_path, stereo);
-  if (options.verbose) {
-    std::cout << "Wrote output WAV: " << output_path << "\n";
+  // Build output path: use title + BPM when auto-naming YouTube downloads.
+  std::string actual_output = output_path;
+  if (actual_output.empty()) {
+    if (!stereo.title.empty()) {
+      int bpm_int = static_cast<int>(std::round(final_bpm));
+      actual_output = sanitize_filename(stereo.title) + "_" +
+                      std::to_string(bpm_int) + "bpm.wav";
+    } else {
+      actual_output = "output_click.wav";
+    }
   }
+
+  WavWriter::write(actual_output, stereo);
+  std::cout << "Output: " << actual_output << "\n";
 }
 
 }  // namespace bpm

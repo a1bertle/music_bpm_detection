@@ -107,12 +107,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (output_path.empty()) {
-    if (input_path.find("://") != std::string::npos) {
-      output_path = "output_click.wav";
-    } else {
-      output_path = input_path + "_click.wav";
-    }
+  if (output_path.empty() && input_path.find("://") == std::string::npos) {
+    output_path = input_path + "_click.wav";
   }
 
   try {
