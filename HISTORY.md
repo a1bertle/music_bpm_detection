@@ -100,3 +100,28 @@ The pipeline detects URLs by checking for `://` in the input path. Default outpu
 | Art Exhibit — Young the Giant | YouTube URL | 150.6 | 150 |
 
 Prerequisites: `yt-dlp` and `ffmpeg` must be installed. The README was updated with installation instructions for macOS (Homebrew) and Ubuntu/Debian.
+
+## Sub-Harmonic Override Fix in Multi-Candidate Evaluation (Claude Code)
+
+Testing with Bad Bunny — NUEVAYoL (actual: 118 BPM) revealed that the pipeline returned 78.3 BPM despite the tempo estimator correctly identifying 117.5 BPM as the top candidate.
+
+### Root cause
+
+The multi-candidate beat tracker evaluation was overriding the tempo estimator's primary pick with a 2/3 sub-harmonic (78.3 BPM ≈ 117.5 × 2/3). This happened because:
+
+1. **The ±40% BPM filter didn't catch it.** The filter blocks candidates outside 0.6x–1.4x of the primary BPM. The ratio 78.3/118 = 0.66 squeaks past the 0.6 lower bound, unlike a true half-tempo (0.5x) which would be blocked.
+
+2. **Slower tempos get inflated per-beat DP scores.** The beat tracker's DP search window is [0.5×period, 2.0×period]. For the slower period=66 candidate, this window spans 33–132 frames — wide enough to always find a strong onset nearby. Combined with fewer total beats (240 vs 354), the normalized score (score/beat_count) was 4.6% higher for the incorrect slower tempo (1.979 vs 1.893).
+
+### Fix
+
+Added a primary-candidate margin (`kPrimaryMargin = 1.05`) in `src/pipeline.cpp`. Non-primary candidates must now exceed the tempo estimator's primary pick by at least 5% in normalized beat-tracker score to override it. This prevents marginal sub-harmonic overrides while still allowing genuinely better candidates (with >5% advantage) to win.
+
+The corresponding Python implementation in `visualizer/bpm_visualizer.ipynb` (cell: "Multi-candidate evaluation") was updated to match.
+
+### Test results
+
+| Track | Before | After | Actual BPM |
+|-------|--------|-------|------------|
+| Bad Bunny — NUEVAYoL | 78.3 BPM | 117.5 BPM | 118 |
+| Foals — My Number | 129.2 BPM | 129.2 BPM | 128 |

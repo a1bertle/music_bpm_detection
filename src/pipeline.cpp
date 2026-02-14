@@ -89,6 +89,8 @@ void Pipeline::run(const std::string &input_path,
   BeatTracker::Result beats;
   int best_period = tempo.period_frames;
   double best_beat_score = -std::numeric_limits<double>::infinity();
+  double primary_norm_score = -std::numeric_limits<double>::infinity();
+  constexpr double kPrimaryMargin = 1.05;
 
   float primary_bpm = tempo.bpm;
   for (int candidate : tempo.candidate_periods) {
@@ -123,7 +125,18 @@ void Pipeline::run(const std::string &input_path,
                 << " beats=" << candidate_beats.beat_samples.size()
                 << " norm=" << norm_score << "\n";
     }
-    if (norm_score > best_beat_score) {
+    if (candidate == tempo.period_frames) {
+      primary_norm_score = norm_score;
+    }
+    // Require non-primary candidates to exceed the primary's score by a
+    // margin — sub-harmonics can achieve slightly inflated per-beat scores
+    // due to wider DP search windows.
+    double threshold = best_beat_score;
+    if (candidate != tempo.period_frames &&
+        primary_norm_score > -std::numeric_limits<double>::infinity()) {
+      threshold = std::max(threshold, primary_norm_score * kPrimaryMargin);
+    }
+    if (norm_score > threshold) {
       best_beat_score = norm_score;
       beats = std::move(candidate_beats);
       best_period = candidate;

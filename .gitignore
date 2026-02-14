@@ -54,4 +54,9 @@ build/
 
 CLAUDE.md
 
+# Jupyter
+.ipynb_checkpoints/
 
+# Visualizer artifacts
+visualizer/bpm_visualizer.html
+visualizer/bpm_visualizer_test.ipynb
