@@ -64,7 +64,7 @@ Loads audio via librosa, converts to mono, plots stereo and mono waveforms.
 ### 4. Beat Tracking (Dynamic Programming — Ellis 2007)
 - Forward DP pass with log-ratio penalty (α = 680)
 - Backtrace from last 10% of signal
-- Multi-candidate evaluation with ±40% BPM filter and normalized scoring
+- Multi-candidate evaluation with ±30% BPM filter and normalized scoring
 - **Plots**: penalty function shape, candidate comparison bar chart, DP score over time, beats on onset strength (full + zoomed)
 
 ### 5. Metronome Click

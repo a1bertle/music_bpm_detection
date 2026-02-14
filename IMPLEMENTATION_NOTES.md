@@ -70,7 +70,7 @@ The `TempoEstimator` (`tempo_estimator.cpp`) implements autocorrelation with pri
 
 - **FFT-based autocorrelation.** The research notes autocorrelation can be computed in O(N log N) via FFT (forward FFT, multiply by conjugate, inverse FFT). The implementation uses direct computation at O(N * L) where L is the lag range. For typical onset vectors (~8000 frames) and lag ranges (~80 lags), this is fast enough, but FFT-based computation would be more efficient for longer tracks or wider BPM ranges.
 - **Tempogram.** The research describes computing autocorrelation in a sliding window across time to produce a 2D tempogram for tracking local tempo changes. The implementation computes a single global autocorrelation. This is the primary limitation for classical music with rubato.
-- **Multiple tempo candidates.** The implementation returns a single BPM. Libraries like Essentia return multiple candidates with confidence scores. A multi-candidate approach would allow the beat tracker to try several tempos and pick the best.
+- **~~Multiple tempo candidates.~~** *(Now implemented.)* The tempo estimator returns the top 5 candidate periods (separated by ≥3 lags), and the pipeline evaluates each through the beat tracker, selecting the one with the highest normalized DP score. A ±30% BPM filter and 5% primary margin prevent sub-harmonic overrides.
 
 ---
 
@@ -101,7 +101,7 @@ The `BeatTracker` (`beat_tracker.cpp`) implements Ellis 2007 DP:
 
 **What's not implemented:**
 
-- **Multiple tempo hypotheses.** Ellis suggests running the DP with several candidate tempos and selecting the sequence with the highest total score. The implementation uses only the single best tempo from the estimator.
+- **~~Multiple tempo hypotheses.~~** *(Now implemented.)* The pipeline runs the DP beat tracker with the top 5 tempo candidates from the estimator and selects the sequence with the highest normalized score (total score / beat count).
 - **Local tempo adaptation.** The DP assumes a fixed period across the entire track. An extension would allow the period to vary slowly, which would improve performance on tracks with gradual tempo changes.
 - **Adjustable alpha per genre.** The research notes alpha could be reduced (e.g., 400) for classical music to allow more flexible beat placement. The default 680 is exposed as a parameter but there is no automatic genre-based adjustment.
 
@@ -186,7 +186,7 @@ The implementation follows the recommended algorithm choices closely: mel-freque
 |-----|--------|---------------------|
 | No complex-domain onset detection | Weaker detection of soft/pitched onsets in classical music | Add phase-based onset detection as an alternative mode |
 | Single global tempo | Cannot track tempo changes (rubato, accelerando) | Implement windowed autocorrelation tempogram |
-| Single tempo hypothesis for beat tracker | May lock onto wrong tempo if estimator errs | Run DP with top-N tempo candidates, pick highest-scoring sequence |
+| ~~Single tempo hypothesis for beat tracker~~ | *(Resolved)* Pipeline now evaluates top 5 candidates via beat tracker | — |
 | No superflux | Vibrato can produce false onsets | Compare each bin against local max of previous frames |
 | No deep learning | Lower accuracy ceiling than RNN/TCN approaches | Would require pre-trained models and significant complexity |
 | WAV output only | Large files compared to MP3 | Integrate LAME for optional MP3 encoding |

@@ -103,7 +103,7 @@ Prerequisites: `yt-dlp` and `ffmpeg` must be installed. The README was updated w
 
 ## Sub-Harmonic Override Fix in Multi-Candidate Evaluation (Claude Code)
 
-Testing with Bad Bunny — NUEVAYoL (actual: 118 BPM) revealed that the pipeline returned 78.3 BPM despite the tempo estimator correctly identifying 117.5 BPM as the top candidate.
+Testing with Bad Bunny — NUEVAYoL (actual: 117 BPM) revealed that the pipeline returned 78.3 BPM despite the tempo estimator correctly identifying 117.5 BPM as the top candidate.
 
 ### Root cause
 
@@ -123,7 +123,7 @@ The corresponding Python implementation in `visualizer/bpm_visualizer.ipynb` (ce
 
 | Track | Before | After | Actual BPM |
 |-------|--------|-------|------------|
-| Bad Bunny — NUEVAYoL | 78.3 BPM | 117.5 BPM | 118 |
+| Bad Bunny — NUEVAYoL | 78.3 BPM | 117.5 BPM | 117 |
 | Foals — My Number | 129.2 BPM | 129.2 BPM | 128 |
 
 ## Tighten BPM Candidate Filter to ±30% (Claude Code)
