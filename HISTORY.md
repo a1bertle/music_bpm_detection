@@ -125,3 +125,25 @@ The corresponding Python implementation in `visualizer/bpm_visualizer.ipynb` (ce
 |-------|--------|-------|------------|
 | Bad Bunny — NUEVAYoL | 78.3 BPM | 117.5 BPM | 118 |
 | Foals — My Number | 129.2 BPM | 129.2 BPM | 128 |
+
+## Tighten BPM Candidate Filter to ±30% (Claude Code)
+
+Testing Bad Bunny — NUEVAYoL with a different YouTube upload revealed that the 5% primary margin fix was fragile. The 2/3 sub-harmonic (78.3 BPM) achieved a 5.5% higher normalized score on one upload but only 4.6% on another — landing on opposite sides of the 5% threshold depending on minor encoding differences.
+
+### Root cause
+
+The ±40% BPM filter (0.6–1.4) was too permissive. The 2/3 sub-harmonic ratio (78.3/117.5 = 0.667) passed the 0.6 lower bound, allowing it into the candidate comparison where its inflated per-beat DP score could marginally beat the 5% margin on some audio encodes.
+
+### Fix
+
+Tightened the BPM candidate filter from ±40% (0.6–1.4) to ±30% (0.7–1.3) in `src/pipeline.cpp`. This directly excludes both 2/3 sub-harmonics (ratio 0.667 < 0.7) and 3/2 super-harmonics (ratio 1.5 > 1.3), while still allowing legitimate nearby candidates within ±30% of the primary estimate.
+
+Updated the notebook's multi-candidate evaluation cell and `CLAUDE.md` parameter reference to match.
+
+### Test results
+
+| Track | Before (±40%) | After (±30%) | Actual BPM |
+|-------|---------------|--------------|------------|
+| Bad Bunny — NUEVAYoL (upload 1) | 117.5 BPM | 117.5 BPM | 117 |
+| Bad Bunny — NUEVAYoL (upload 2) | 78.3 BPM | 117.5 BPM | 117 |
+| Foals — My Number | 129.2 BPM | 129.2 BPM | 128 |

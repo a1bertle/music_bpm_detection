@@ -99,13 +99,13 @@ void Pipeline::run(const std::string &input_path,
               static_cast<float>(onset.hop_size) / static_cast<float>(candidate)
         : 0.0f;
 
-    // Only compare candidates within ±40% of the primary estimate to avoid
-    // sub-harmonics (half/double tempo) distorting the comparison.
+    // Only compare candidates within ±30% of the primary estimate to avoid
+    // sub-harmonics (2/3, 3/2, half/double tempo) distorting the comparison.
     float ratio = candidate_bpm / primary_bpm;
-    if (ratio < 0.6f || ratio > 1.4f) {
+    if (ratio < 0.7f || ratio > 1.3f) {
       if (options.verbose) {
         std::cout << "  Candidate period=" << candidate
-                  << " (" << candidate_bpm << " BPM) — skipped (outside ±40%)\n";
+                  << " (" << candidate_bpm << " BPM) — skipped (outside ±30%)\n";
       }
       continue;
     }
