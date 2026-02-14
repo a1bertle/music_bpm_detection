@@ -11,6 +11,8 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Local (Jupyter or VS Code)
+
 Open `bpm_visualizer.ipynb` in Jupyter or VS Code. Edit the config cell at the top to point to your audio file:
 
 ```python
@@ -19,6 +21,26 @@ KNOWN_BPM = 128  # Set to None if unknown
 ```
 
 Run all cells. The notebook walks through every pipeline stage with plots and explanations.
+
+YouTube URLs are also supported — set `AUDIO_PATH` to a URL and the notebook will download via yt-dlp + ffmpeg:
+
+```python
+AUDIO_PATH = 'https://www.youtube.com/watch?v=...'
+KNOWN_BPM = None
+```
+
+### Google Colab
+
+You can run the notebook in the browser without any local setup:
+
+1. Open in Colab: [Launch on Google Colab](https://colab.research.google.com/github/a1bertle/music_bpm_detection/blob/main/visualizer/bpm_visualizer.ipynb)
+2. Colab has numpy, scipy, and matplotlib pre-installed. Install the remaining dependencies by adding a cell at the top:
+   ```python
+   !pip install librosa
+   ```
+3. Upload an audio file via the Colab file browser (folder icon in the left sidebar), then set `AUDIO_PATH` to its path (e.g. `'/content/song.mp3'`)
+4. Alternatively, use a YouTube URL as `AUDIO_PATH` — yt-dlp and ffmpeg are available on Colab by default
+5. Run all cells
 
 ## Notebook Sections
 

@@ -185,6 +185,10 @@ third_party/
 
 MP3 input requires no external tools. MP4/M4A and YouTube features are only available when the corresponding tools are installed.
 
+## Visualizer
+
+An interactive Jupyter notebook that re-implements the entire pipeline in Python with step-by-step plots and explanations. See [visualizer/README.md](visualizer/README.md) for setup and usage.
+
 ## Limitations
 
 - Estimates a single global BPM per track. Music with significant tempo changes (rubato, accelerando) will receive an averaged tempo.
