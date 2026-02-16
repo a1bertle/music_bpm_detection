@@ -9,7 +9,9 @@ struct PipelineOptions {
   float max_bpm = 220.0f;
   float click_volume = 0.5f;
   float click_freq = 1000.0f;
+  float downbeat_freq = 1500.0f;
   bool verbose = false;
+  bool detect_meter = true;
 };
 
 class Pipeline {

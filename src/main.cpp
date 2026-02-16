@@ -15,6 +15,8 @@ void print_help() {
             << "  --max-bpm <float>       Max BPM (default: 220)\n"
             << "  --click-volume <float>  Click volume 0.0-1.0 (default: 0.5)\n"
             << "  --click-freq <float>    Click frequency Hz (default: 1000)\n"
+            << "  --downbeat-freq <float> Downbeat click frequency Hz (default: 1500)\n"
+            << "  --no-meter              Disable time signature detection\n"
             << "  -h, --help              Show help\n";
 }
 
@@ -90,6 +92,19 @@ int main(int argc, char **argv) {
         return 1;
       }
       options.click_freq = std::stof(value);
+      continue;
+    }
+    if (arg == "--downbeat-freq") {
+      std::string value;
+      if (!parse_arg(argc, argv, i, value)) {
+        std::cerr << "Missing value for downbeat frequency.\n";
+        return 1;
+      }
+      options.downbeat_freq = std::stof(value);
+      continue;
+    }
+    if (arg == "--no-meter") {
+      options.detect_meter = false;
       continue;
     }
 

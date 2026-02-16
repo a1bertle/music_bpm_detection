@@ -67,4 +67,58 @@ void Metronome::overlay(AudioBuffer &audio,
   }
 }
 
+void Metronome::overlay(AudioBuffer &audio,
+                        const std::vector<std::size_t> &beat_samples,
+                        const std::vector<std::size_t> &downbeat_samples,
+                        float click_volume,
+                        float click_freq,
+                        float downbeat_freq) const {
+  if (audio.sample_rate <= 0 || audio.channels <= 0 || audio.samples.empty()) {
+    return;
+  }
+  if (beat_samples.empty()) {
+    return;
+  }
+
+  std::vector<float> normal_click = synth_click(audio.sample_rate, click_volume, click_freq);
+  std::vector<float> db_click = synth_click(audio.sample_rate, click_volume, downbeat_freq);
+  if (normal_click.empty()) {
+    return;
+  }
+
+  std::size_t frames = audio.num_frames();
+  std::size_t channels = static_cast<std::size_t>(audio.channels);
+
+  // Two-pointer scan: both lists are sorted by sample position.
+  std::size_t d = 0;
+  for (std::size_t beat : beat_samples) {
+    if (beat >= frames) {
+      continue;
+    }
+
+    // Advance downbeat pointer.
+    while (d < downbeat_samples.size() && downbeat_samples[d] < beat) {
+      ++d;
+    }
+    bool is_downbeat = (d < downbeat_samples.size() && downbeat_samples[d] == beat);
+
+    const std::vector<float> &click = is_downbeat ? db_click : normal_click;
+
+    for (std::size_t i = 0; i < click.size(); ++i) {
+      std::size_t frame = beat + i;
+      if (frame >= frames) {
+        break;
+      }
+      for (std::size_t ch = 0; ch < channels; ++ch) {
+        std::size_t index = frame * channels + ch;
+        audio.samples[index] += click[i];
+      }
+    }
+  }
+
+  for (float &sample : audio.samples) {
+    sample = std::max(-1.0f, std::min(1.0f, sample));
+  }
+}
+
 }  // namespace bpm

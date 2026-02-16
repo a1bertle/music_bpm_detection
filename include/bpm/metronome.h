@@ -14,6 +14,13 @@ class Metronome {
                float click_volume = 0.5f,
                float click_freq = 1000.0f) const;
 
+  void overlay(AudioBuffer &audio,
+               const std::vector<std::size_t> &beat_samples,
+               const std::vector<std::size_t> &downbeat_samples,
+               float click_volume,
+               float click_freq,
+               float downbeat_freq) const;
+
  private:
   std::vector<float> synth_click(int sample_rate,
                                  float click_volume,

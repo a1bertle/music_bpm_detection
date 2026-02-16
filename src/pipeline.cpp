@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "bpm/beat_tracker.h"
+#include "bpm/meter_detector.h"
 #include "bpm/metronome.h"
 #include "bpm/mp3_decoder.h"
 #include "bpm/mp4_decoder.h"
@@ -155,6 +156,20 @@ void Pipeline::run(const std::string &input_path,
   std::cout << "Detected BPM: " << final_bpm << "\n";
   std::cout << "Beat count: " << beats.beat_samples.size() << "\n";
 
+  // Meter detection.
+  MeterDetector::Result meter;
+  if (options.detect_meter) {
+    MeterDetector meter_detector;
+    meter = meter_detector.detect(beats.beat_samples,
+                                  onset.onset_strength,
+                                  onset.hop_size,
+                                  mono.sample_rate,
+                                  final_bpm,
+                                  options.verbose);
+    std::cout << "Time signature: " << time_signature_string(meter.time_signature)
+              << "\n";
+  }
+
   // Build output paths.
   int bpm_int = static_cast<int>(std::round(final_bpm));
   std::string actual_output = output_path;
@@ -175,7 +190,12 @@ void Pipeline::run(const std::string &input_path,
   }
 
   Metronome metronome;
-  metronome.overlay(stereo, beats.beat_samples, options.click_volume, options.click_freq);
+  if (options.detect_meter && !meter.downbeat_samples.empty()) {
+    metronome.overlay(stereo, beats.beat_samples, meter.downbeat_samples,
+                      options.click_volume, options.click_freq, options.downbeat_freq);
+  } else {
+    metronome.overlay(stereo, beats.beat_samples, options.click_volume, options.click_freq);
+  }
 
   WavWriter::write(actual_output, stereo);
   std::cout << "Output: " << actual_output << "\n";
