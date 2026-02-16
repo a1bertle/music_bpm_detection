@@ -18,7 +18,7 @@ LINE_RE = re.compile(
     (?:-\s*)?
     (?P<url>(?:https?://)?(?:www\.)?\S+)
     \s*\((?P<label>.*)\)\s*
-    \[(?P<bpm>\d+(?:\.\d+)?)\s+BPM[^\]]*\]
+    \[(?P<bpm>\d+(?:\.\d+)?)\s+BPM(?:,\s*(?P<ts>\d+/\d+))?\s*\]
     \s*$""",
     re.VERBOSE,
 )
@@ -72,12 +72,22 @@ def extract_detected_bpm(output: str) -> str | None:
     return None
 
 
+def extract_detected_ts(output: str) -> str | None:
+    for line in output.splitlines():
+        if line.startswith("Time signature:"):
+            parts = line.split()
+            if len(parts) >= 3:
+                return parts[2]
+    return None
+
+
 def run_detect(
     bpm_detect: str,
     input_arg: str,
     expected: float,
     label: str,
     tolerance_pct: float,
+    expected_ts: str | None = None,
 ) -> tuple[bool, str]:
     cmd = [bpm_detect, "-v", "-o", "/dev/null", input_arg]
     result = run_cmd(cmd)
@@ -97,13 +107,31 @@ def run_detect(
         return False, f"FAILED: Invalid expected BPM ({expected}) for {label}"
 
     pct_error = abs(detected - expected) / expected * 100.0
+
+    # Check time signature if expected
+    ts_status = ""
+    ts_ok = True
+    if expected_ts:
+        detected_ts = extract_detected_ts(result.stdout)
+        if detected_ts is None:
+            ts_status = " | Time sig: NOT REPORTED"
+            ts_ok = False
+        elif detected_ts == expected_ts:
+            ts_status = f" | Time sig: {detected_ts} OK"
+        else:
+            ts_status = f" | Time sig: {detected_ts} (expected {expected_ts}) MISMATCH"
+            ts_ok = False
+
     print(
         f"Detected: {detected:.3f} BPM | Expected: {expected:.3f} BPM | "
-        f"Error: {pct_error:.2f}% (tolerance {tolerance_pct:.2f}%)"
+        f"Error: {pct_error:.2f}% (tolerance {tolerance_pct:.2f}%){ts_status}"
     )
-    if pct_error <= tolerance_pct:
-        return True, ""
-    return False, f"FAILED: {label} outside tolerance"
+
+    if pct_error > tolerance_pct:
+        return False, f"FAILED: {label} BPM outside tolerance"
+    if not ts_ok:
+        return False, f"FAILED: {label} time signature mismatch"
+    return True, ""
 
 
 def main() -> int:
@@ -131,6 +159,7 @@ def main() -> int:
             128.0,
             "Foals - My Number (local MP3)",
             args.tolerance_pct,
+            expected_ts="4/4",
         )
         if ok:
             pass_count += 1
@@ -158,7 +187,7 @@ def main() -> int:
                 if not match:
                     print(
                         "SKIP: Unable to parse line (expected: "
-                        "'- <URL> (<track name>) [<actual bpm> BPM<(optional time signature)]'): "
+                        "'- <URL> (<track name>) [<bpm> BPM, <time sig>]'): "
                         f"{line}",
                         file=sys.stderr,
                     )
@@ -167,8 +196,12 @@ def main() -> int:
                 url = normalize_url(match.group("url"))
                 label = match.group("label")
                 expected = float(match.group("bpm"))
+                expected_ts = match.group("ts")  # None if not present
 
-                ok, msg = run_detect(BPM_DETECT, url, expected, label, args.tolerance_pct)
+                ok, msg = run_detect(
+                    BPM_DETECT, url, expected, label, args.tolerance_pct,
+                    expected_ts=expected_ts,
+                )
                 if ok:
                     pass_count += 1
                 else:

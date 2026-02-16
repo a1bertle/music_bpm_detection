@@ -147,3 +147,46 @@ Updated the notebook's multi-candidate evaluation cell and `CLAUDE.md` parameter
 | Bad Bunny — NUEVAYoL (upload 1) | 117.5 BPM | 117.5 BPM | 117 |
 | Bad Bunny — NUEVAYoL (upload 2) | 78.3 BPM | 117.5 BPM | 117 |
 | Foals — My Number | 129.2 BPM | 129.2 BPM | 128 |
+
+## Time Signature Detection (Claude Code)
+
+Added a new pipeline stage (`MeterDetector`) that analyzes accent patterns in the detected beats to identify the time signature (2/4, 3/4, 4/4, 6/8). The metronome now plays a higher-pitched click (1500 Hz) on downbeats to make the click track musically meaningful.
+
+### Algorithm
+
+1. Collect onset strengths at each beat position from the spectral flux output
+2. Test candidate groupings N ∈ {2, 3, 4} at all phase offsets (0 to N−1)
+3. Compute **accent contrast** (how much the proposed downbeat position stands out) and **beat-level autocorrelation** at each grouping lag
+4. Combined score: 0.7 × accent\_contrast + 0.3 × autocorrelation
+5. **2/4 vs 4/4 disambiguation**: prefer 4/4 when 4-beat accent contrast > 0.1 or score ≥ 80% of 2/4
+6. **Low-confidence fallback**: when confidence < 0.15 and best grouping ≠ 4, fall back to 4/4 only if the winner doesn't outperform 4/4 by > 10%
+7. **6/8 detection**: compound subdivision check — sample onset strength at 1/3, 2/3 (ternary) vs 1/2 (binary) of inter-beat intervals. Require ternary average to be positive and > 1.1× binary average
+
+### New files
+
+- `include/bpm/meter_detector.h` / `src/meter_detector.cpp` — `MeterDetector` class with `detect()`, accent scoring, beat autocorrelation, compound subdivision check, downbeat extraction
+- New `Metronome::overlay` overload accepting downbeat samples and downbeat frequency
+- `PipelineOptions::downbeat_freq` (1500 Hz) and `detect_meter` (true) fields
+- CLI flags: `--no-meter`, `--downbeat-freq`
+
+### Bug fixes during development
+
+Three cascading issues were found and fixed when testing with a waltz (Ponts de paris, 3/4 at 167 BPM):
+
+1. **Low-confidence fallback too aggressive.** The original fallback unconditionally switched to 4/4 when confidence < 0.15, even when grouping=3 clearly outscored grouping=4 (0.181 vs 0.154). Fix: only fall back when the winner doesn't exceed the best 4/4 score by > 10%.
+
+2. **Compound subdivision check broken for negative onset values.** Z-score normalized onset strength can be negative. The comparison `ternary > 1.1 × binary` goes the wrong direction with negative values (−0.088 > 1.1 × −0.181 is TRUE). Fix: return false when ternary average is non-positive.
+
+3. **BPM > 160 heuristic too aggressive.** A heuristic assumed all fast 3-groupings were 6/8, incorrectly reclassifying fast waltzes. Fix: removed — the compound subdivision check is the principled test for 3/4 vs 6/8.
+
+### Test results
+
+| Track | BPM | Time Signature | Detected TS |
+|-------|-----|---------------|-------------|
+| Kimbra — Foolish Thinking | 125 | 4/4 | 4/4 |
+| Gotye — Somebody That I Used To Know | 129 | 4/4 | 4/4 |
+| FOALS — Birch Tree | 108 | 4/4 | 4/4 |
+| Coldplay — Sparks | 136 | 6/8 | 6/8 |
+| Bad Bunny — NUEVAYoL | 117 | 4/4 | 4/4 |
+| Ponts de paris (waltz) | 167 | 3/4 | 3/4 |
+| Foals — My Number (offline) | 128 | 4/4 | 4/4 |

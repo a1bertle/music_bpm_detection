@@ -67,13 +67,21 @@ Loads audio via librosa, converts to mono, plots stereo and mono waveforms.
 - Multi-candidate evaluation with ±30% BPM filter and normalized scoring
 - **Plots**: penalty function shape, candidate comparison bar chart, DP score over time, beats on onset strength (full + zoomed)
 
-### 5. Metronome Click
+### 5. Meter Detection
+- Accent pattern analysis: tests groupings of 2, 3, 4 beats at all phase offsets
+- Beat-level autocorrelation for periodicity confirmation
+- 2/4 vs 4/4 disambiguation (prefers 4/4 when 4-beat accent contrast is positive)
+- Compound subdivision check for 6/8 detection (ternary vs binary inter-beat onset patterns)
+- **Plots**: accent contrast per grouping/phase, downbeat positions on onset strength
+
+### 6. Metronome Click
 - 20ms exponentially-decaying sine at 1000 Hz (decay = 200)
+- 1500 Hz higher-pitched click on downbeats
 - **Plots**: click waveform, waveform with beat markers (full + zoomed)
 
-### 6. Full Pipeline Summary
+### 7. Full Pipeline Summary
 - 4-panel overview: waveform → onset strength → autocorrelation → beats
-- Text summary with detected BPM, beat count, and error vs known BPM
+- Text summary with detected BPM, time signature, beat count, and error vs known BPM
 
 ## Parameters
 
@@ -87,6 +95,9 @@ All values match the C++ implementation exactly:
 | Prior center | 120 BPM, σ=1.0 | `tempo_estimator.cpp` |
 | DP alpha | 680.0 | `beat_tracker.h` |
 | Click | 1000 Hz, 20ms, decay=200 | `metronome.h` |
+| Downbeat click | 1500 Hz | `pipeline.h` |
+| Meter accent weight | 0.7 | `meter_detector.cpp` |
+| Meter autocorr weight | 0.3 | `meter_detector.cpp` |
 
 ## Dependencies
 
