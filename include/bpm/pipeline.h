@@ -12,6 +12,7 @@ struct PipelineOptions {
   float downbeat_freq = 1500.0f;
   bool verbose = false;
   bool detect_meter = true;
+  bool accent_downbeats = false;
 };
 
 class Pipeline {

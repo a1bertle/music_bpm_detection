@@ -190,7 +190,7 @@ void Pipeline::run(const std::string &input_path,
   }
 
   Metronome metronome;
-  if (options.detect_meter && !meter.downbeat_samples.empty()) {
+  if (options.accent_downbeats && !meter.downbeat_samples.empty()) {
     metronome.overlay(stereo, beats.beat_samples, meter.downbeat_samples,
                       options.click_volume, options.click_freq, options.downbeat_freq);
   } else {
