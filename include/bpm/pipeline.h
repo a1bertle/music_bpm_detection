@@ -13,6 +13,7 @@ struct PipelineOptions {
   bool verbose = false;
   bool detect_meter = true;
   bool accent_downbeats = false;
+  bool detect_key = true;
 };
 
 class Pipeline {

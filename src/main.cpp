@@ -17,6 +17,7 @@ void print_help() {
             << "  --click-freq <float>    Click frequency Hz (default: 1000)\n"
             << "  --downbeat-freq <float> Downbeat click frequency Hz (default: 1500)\n"
             << "  --accent-downbeats      Use higher-pitched click on downbeats\n"
+            << "  --no-key                Disable key signature detection\n"
             << "  -h, --help              Show help\n";
 }
 
@@ -105,6 +106,10 @@ int main(int argc, char **argv) {
     }
     if (arg == "--accent-downbeats") {
       options.accent_downbeats = true;
+      continue;
+    }
+    if (arg == "--no-key") {
+      options.detect_key = false;
       continue;
     }
 

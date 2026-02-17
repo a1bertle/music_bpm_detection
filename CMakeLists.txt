@@ -32,6 +32,7 @@ add_library(bpm STATIC
   src/tempo_estimator.cpp
   src/beat_tracker.cpp
   src/meter_detector.cpp
+  src/key_detector.cpp
   src/metronome.cpp
   src/wav_writer.cpp
   src/pipeline.cpp

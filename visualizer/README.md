@@ -47,13 +47,21 @@ You can run the notebook in the browser without any local setup:
 ### 1. Audio Loading
 Loads audio via librosa, converts to mono, plots stereo and mono waveforms.
 
-### 2. Onset Detection (Mel-Frequency Spectral Flux)
+### 2. Key Detection (Krumhansl-Schmuckler)
+- Computes 12-bin chromagram via 4096-point FFT (C2–C7 frequency range, no overlap)
+- Interpolated bin-to-chroma mapping: each FFT bin distributes power between the two nearest pitch classes proportionally to distance
+- Per-octave normalization: L1-normalizes chroma in each octave independently, then averages — prevents harmonic overtones from dominating
+- Correlates chroma against Krumhansl-Kessler key profiles for all 24 keys (Pearson r)
+- Reports key, Pearson correlation, and confidence (gap to runner-up)
+- **Plots**: chromagram bar chart, all-keys correlation ranking
+
+### 3. Onset Detection (Mel-Frequency Spectral Flux)
 - Builds a 40-band mel filterbank (30–8000 Hz)
 - Computes STFT with Hann window (2048 FFT, 512 hop)
 - Log-compressed mel energy → half-wave rectified spectral flux → z-score normalization
 - **Plots**: mel filterbank, mel spectrogram heatmap, onset strength overlaid on waveform
 
-### 3. Tempo Estimation (Autocorrelation + Prior)
+### 4. Tempo Estimation (Autocorrelation + Prior)
 - Normalized autocorrelation over lag range (50–220 BPM)
 - Log-Gaussian tempo prior centered at 120 BPM (σ = 1.0 octave)
 - Iterative octave correction with median noise floor threshold
@@ -61,25 +69,25 @@ Loads audio via librosa, converts to mono, plots stereo and mono waveforms.
 - Top 5 candidate periods collected for beat tracking
 - **Plots**: raw autocorrelation, prior curve, weighted autocorrelation, octave correction steps, candidate markers
 
-### 4. Beat Tracking (Dynamic Programming — Ellis 2007)
+### 5. Beat Tracking (Dynamic Programming — Ellis 2007)
 - Forward DP pass with log-ratio penalty (α = 680)
 - Backtrace from last 10% of signal
 - Multi-candidate evaluation with ±30% BPM filter and normalized scoring
 - **Plots**: penalty function shape, candidate comparison bar chart, DP score over time, beats on onset strength (full + zoomed)
 
-### 5. Meter Detection
+### 6. Meter Detection
 - Accent pattern analysis: tests groupings of 2, 3, 4 beats at all phase offsets
 - Beat-level autocorrelation for periodicity confirmation
 - 2/4 vs 4/4 disambiguation (prefers 4/4 when 4-beat accent contrast is positive)
 - Compound subdivision check for 6/8 detection (ternary vs binary inter-beat onset patterns)
 - **Plots**: accent contrast per grouping/phase, downbeat positions on onset strength
 
-### 6. Metronome Click
+### 7. Metronome Click
 - 20ms exponentially-decaying sine at 1000 Hz (decay = 200)
 - 1500 Hz higher-pitched click on downbeats
 - **Plots**: click waveform, waveform with beat markers (full + zoomed)
 
-### 7. Full Pipeline Summary
+### 8. Full Pipeline Summary
 - 4-panel overview: waveform → onset strength → autocorrelation → beats
 - Text summary with detected BPM, time signature, beat count, and error vs known BPM
 
@@ -98,6 +106,9 @@ All values match the C++ implementation exactly:
 | Downbeat click | 1500 Hz | `pipeline.h` |
 | Meter accent weight | 0.7 | `meter_detector.cpp` |
 | Meter autocorr weight | 0.3 | `meter_detector.cpp` |
+| Chroma FFT size | 4096 | `key_detector.h` |
+| Chroma hop size | 4096 | `key_detector.h` |
+| Chroma freq range | 65.4–2093 Hz (C2–C7) | `key_detector.h` |
 
 ## Dependencies
 

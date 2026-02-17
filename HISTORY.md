@@ -190,3 +190,36 @@ Three cascading issues were found and fixed when testing with a waltz (Ponts de 
 | Bad Bunny — NUEVAYoL | 117 | 4/4 | 4/4 |
 | Ponts de paris (waltz) | 167 | 3/4 | 3/4 |
 | Foals — My Number (offline) | 128 | 4/4 | 4/4 |
+
+## Key Signature Detection (Claude Code)
+
+Added a new pipeline stage (`KeyDetector`) that detects the musical key of a track using the Krumhansl-Schmuckler algorithm. Key detection forks from the main pipeline after mono conversion, running independently of the BPM/beat tracking path.
+
+### Algorithm
+
+1. Compute 4096-point FFT with Hann window, no overlap (hop = 4096)
+2. Map FFT bins in [65.4 Hz (C2), 2093 Hz (C7)] to pitch classes using **interpolated bin-to-chroma mapping** — each bin distributes energy between the two nearest pitch classes proportionally to distance
+3. Accumulate **power** (magnitude²) per octave, then **L1-normalize each octave independently** and average — prevents harmonic overtones in upper octaves from dominating the chroma
+4. Correlate the 12-bin chromagram against Krumhansl-Kessler profiles for all 24 keys using Pearson correlation
+5. Key with highest correlation wins; confidence = gap to runner-up
+
+### New files
+
+- `include/bpm/key_detector.h` / `src/key_detector.cpp` — `KeyDetector` class with `detect()`, chromagram computation, Pearson correlation
+- `PipelineOptions::detect_key` (true) field
+- CLI flag: `--no-key` to disable key detection
+- Output filename includes key label (e.g., `track_128bpm_Csharpmin.wav`)
+
+### Bug fixes during development
+
+1. **Magnitude vs power spectrum.** The initial implementation used magnitude (sqrt of power) for chromagram accumulation, which produced a flatter pitch class distribution and detected B major instead of C# minor. Switching to power spectrum (magnitude²) sharpened the peaks for the correct pitch classes.
+
+2. **Simple nearest-bin mapping missed pitch classes at low frequencies.** With FFT=4096 at 44100 Hz, bin spacing (10.77 Hz) exceeds semitone spacing (~5 Hz) below C3, causing 6 out of 12 pitch classes to have zero FFT bins in the lowest octave. Fix: interpolated mapping distributes each bin's energy between two nearest pitch classes proportionally.
+
+3. **Harmonic overtones dominating chroma.** Upper octaves contain more FFT bins and accumulate more total energy, causing harmonics (especially the 3rd harmonic, a perfect 5th above) to inflate wrong pitch classes. Fix: per-octave L1-normalization equalizes each octave's contribution before averaging.
+
+### Test results
+
+| Track | Detected Key | Actual Key |
+|-------|-------------|------------|
+| Foals — My Number (offline) | C# minor | C# minor |

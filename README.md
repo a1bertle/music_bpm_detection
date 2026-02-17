@@ -50,6 +50,8 @@ bpm_detect [options] <input>
 | `--max-bpm <float>` | Maximum BPM to detect | 220 |
 | `--click-volume <float>` | Click volume (0.0 - 1.0) | 0.5 |
 | `--click-freq <float>` | Click tone frequency in Hz | 1000 |
+| `--accent-downbeats` | Higher-pitched click on downbeats | off |
+| `--downbeat-freq <float>` | Downbeat click frequency in Hz | 1500 |
 | `-h, --help` | Show help | |
 
 ### Examples
@@ -98,6 +100,9 @@ TempoEstimator               │
   ▼                          │
 BeatTracker                  │
   │ dynamic programming      │
+  ▼                          │
+MeterDetector                │
+  │ accent pattern analysis  │
   ▼                          ▼
 Metronome ◄──────────────────┘
   │ overlay clicks on stereo
@@ -119,9 +124,13 @@ Autocorrelation of the onset strength signal reveals periodicities corresponding
 
 A dynamic programming pass (Ellis 2007) finds the globally optimal sequence of beat positions by maximizing onset alignment while penalizing deviations from the estimated inter-beat interval. Beats are backtraced from the highest-scoring frames and converted to sample positions.
 
-### 4. Metronome Overlay
+### 4. Meter Detection
 
-A short (20 ms) exponentially-decaying sine burst is synthesized and mixed into the stereo signal at each beat position. The output is clamped to [-1, 1] to prevent clipping.
+The detected beats are analyzed for accent patterns to identify the time signature (2/4, 3/4, 4/4, or 6/8). For each candidate grouping (2, 3, or 4 beats per measure) at every phase offset, the algorithm computes an accent contrast score (how much the proposed downbeat stands out) and a beat-level autocorrelation at that lag. A compound subdivision check distinguishes 6/8 from 2/4 or 3/4 by comparing onset strength at ternary (1/3, 2/3) vs binary (1/2) inter-beat positions.
+
+### 5. Metronome Overlay
+
+A short (20 ms) exponentially-decaying sine burst is synthesized and mixed into the stereo signal at each beat position. The output is clamped to [-1, 1] to prevent clipping. With `--accent-downbeats`, downbeats receive a higher-pitched click (1500 Hz by default) to distinguish them from regular beats.
 
 ## Project Structure
 
@@ -136,6 +145,7 @@ include/bpm/
   onset_detector.h          Mel-spectral-flux onset detection
   tempo_estimator.h         Autocorrelation tempo estimation
   beat_tracker.h            DP beat tracking
+  meter_detector.h          Time signature detection
   metronome.h               Click synthesis and overlay
   wav_writer.h              16-bit PCM WAV output
   pipeline.h                End-to-end orchestration
@@ -149,6 +159,7 @@ src/
   onset_detector.cpp
   tempo_estimator.cpp
   beat_tracker.cpp
+  meter_detector.cpp
   metronome.cpp
   wav_writer.cpp
   pipeline.cpp
@@ -162,6 +173,7 @@ docs/
   PIPELINE_EXPLAINED.txt
 scripts/
   build.sh                  Build helper script
+  test.py                   Automated test runner
 third_party/
   minimp3/                  MP3 decoder (CC0)
   pocketfft/                FFT library (BSD)

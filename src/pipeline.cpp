@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "bpm/beat_tracker.h"
+#include "bpm/key_detector.h"
 #include "bpm/meter_detector.h"
 #include "bpm/metronome.h"
 #include "bpm/mp3_decoder.h"
@@ -70,6 +71,15 @@ void Pipeline::run(const std::string &input_path,
   }
 
   AudioBuffer mono = stereo.to_mono();
+
+  // Key detection fork — independent of BPM/beat/meter path.
+  KeyDetector::Result key_result;
+  if (options.detect_key) {
+    KeyDetector key_detector;
+    key_result = key_detector.detect(mono, options.verbose);
+    std::cout << "Key: " << key_result.label << "\n";
+  }
+
   OnsetDetector onset_detector;
   auto onset = onset_detector.compute(mono);
   if (options.verbose) {
@@ -177,7 +187,11 @@ void Pipeline::run(const std::string &input_path,
 
   if (actual_output.empty() && !stereo.title.empty()) {
     std::string base = sanitize_filename(stereo.title);
-    actual_output = base + "_" + std::to_string(bpm_int) + "bpm.wav";
+    std::string suffix = std::to_string(bpm_int) + "bpm";
+    if (options.detect_key && !key_result.short_label.empty()) {
+      suffix += "_" + key_result.short_label;
+    }
+    actual_output = base + "_" + suffix + ".wav";
     raw_output = base + ".wav";
   } else if (actual_output.empty()) {
     actual_output = "output_click.wav";

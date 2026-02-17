@@ -18,7 +18,9 @@ LINE_RE = re.compile(
     (?:-\s*)?
     (?P<url>(?:https?://)?(?:www\.)?\S+)
     \s*\((?P<label>.*)\)\s*
-    \[(?P<bpm>\d+(?:\.\d+)?)\s+BPM(?:,\s*(?P<ts>\d+/\d+))?\s*\]
+    \[(?P<bpm>\d+(?:\.\d+)?)\s+BPM
+    (?:,\s*(?P<ts>\d+/\d+))?
+    (?:,\s*(?P<key>[A-Gb#]+\s+(?:major|minor)))?\s*\]
     \s*$""",
     re.VERBOSE,
 )
@@ -81,6 +83,13 @@ def extract_detected_ts(output: str) -> str | None:
     return None
 
 
+def extract_detected_key(output: str) -> str | None:
+    for line in output.splitlines():
+        if line.startswith("Key:"):
+            return line[len("Key:"):].strip()
+    return None
+
+
 def run_detect(
     bpm_detect: str,
     input_arg: str,
@@ -88,6 +97,7 @@ def run_detect(
     label: str,
     tolerance_pct: float,
     expected_ts: str | None = None,
+    expected_key: str | None = None,
 ) -> tuple[bool, str]:
     cmd = [bpm_detect, "-v", "-o", "/dev/null", input_arg]
     result = run_cmd(cmd)
@@ -122,15 +132,31 @@ def run_detect(
             ts_status = f" | Time sig: {detected_ts} (expected {expected_ts}) MISMATCH"
             ts_ok = False
 
+    # Check key if expected
+    key_status = ""
+    key_ok = True
+    if expected_key:
+        detected_key = extract_detected_key(result.stdout)
+        if detected_key is None:
+            key_status = " | Key: NOT REPORTED"
+            key_ok = False
+        elif detected_key == expected_key:
+            key_status = f" | Key: {detected_key} OK"
+        else:
+            key_status = f" | Key: {detected_key} (expected {expected_key}) MISMATCH"
+            key_ok = False
+
     print(
         f"Detected: {detected:.3f} BPM | Expected: {expected:.3f} BPM | "
-        f"Error: {pct_error:.2f}% (tolerance {tolerance_pct:.2f}%){ts_status}"
+        f"Error: {pct_error:.2f}% (tolerance {tolerance_pct:.2f}%){ts_status}{key_status}"
     )
 
     if pct_error > tolerance_pct:
         return False, f"FAILED: {label} BPM outside tolerance"
     if not ts_ok:
         return False, f"FAILED: {label} time signature mismatch"
+    if not key_ok:
+        return False, f"FAILED: {label} key mismatch"
     return True, ""
 
 
@@ -197,10 +223,12 @@ def main() -> int:
                 label = match.group("label")
                 expected = float(match.group("bpm"))
                 expected_ts = match.group("ts")  # None if not present
+                expected_key = match.group("key")  # None if not present
 
                 ok, msg = run_detect(
                     BPM_DETECT, url, expected, label, args.tolerance_pct,
                     expected_ts=expected_ts,
+                    expected_key=expected_key,
                 )
                 if ok:
                     pass_count += 1
