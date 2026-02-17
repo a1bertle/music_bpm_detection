@@ -154,10 +154,13 @@ void Pipeline::run(const std::string &input_path,
     }
   }
 
-  // Recompute BPM from the winning period.
+  // Use the refined (parabolic-interpolated) BPM when the primary candidate
+  // won, otherwise recompute from the winning integer period.
   float frame_rate = static_cast<float>(mono.sample_rate) /
                      static_cast<float>(onset.hop_size);
-  float final_bpm = (best_period > 0) ? 60.0f * frame_rate / static_cast<float>(best_period) : tempo.bpm;
+  float final_bpm = (best_period == tempo.period_frames)
+      ? tempo.bpm
+      : ((best_period > 0) ? 60.0f * frame_rate / static_cast<float>(best_period) : tempo.bpm);
   if (best_period != tempo.period_frames && options.verbose) {
     std::cout << "Beat-tracker re-estimated tempo: " << tempo.bpm
               << " BPM -> " << final_bpm << " BPM (period " << best_period << ")\n";
